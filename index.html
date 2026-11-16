@@ -16,6 +16,7 @@ header{background:#122f29;color:#fff}nav,.heroin,main{max-width:1240px;margin:au
 .feedback{margin-bottom:14px}.scroll{overflow:auto;max-height:410px;margin-top:10px}table{border-collapse:collapse;width:100%;text-align:left;font-size:.92rem}th,td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}th{background:#eef5ef;position:sticky;top:0}td:last-child{min-width:170px;white-space:pre-wrap}footer{color:var(--muted);font-size:.83rem}
 @media(max-width:860px){.filters{grid-template-columns:repeat(2,minmax(0,1fr))}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:620px){.grid{grid-template-columns:1fr}.card{padding:14px}.filters{padding:12px}.metric{padding:12px}.hero h1{font-size:1.9rem}nav strong{font-size:.86rem}}
 [hidden]{display:none!important}.signin{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin:0 0 14px;padding:14px}.signin label{display:grid;gap:4px}.signin input{padding:8px}
+.branch-table th,.branch-table td{vertical-align:top}.branch-table .scroll{max-height:550px}
 </style>
 </head>
 <body>
@@ -38,6 +39,20 @@ header{background:#122f29;color:#fff}nav,.heroin,main{max-width:1240px;margin:au
 <section class="grid">
 <article class="card"><h2>ความพร้อมของอุปกรณ์</h2><p class="hint">สถานะการใช้งานแอปตามคำตอบ</p><div class="bars" id="devices"></div><h2 class="jump">จำนวนโทรศัพท์ต่อคำตอบ</h2><p class="hint">รวมเครื่องร้านและ Delivery ตามที่ผู้ตอบระบุ</p><div class="bars" id="phones"></div></article>
 <article class="card"><h2>การลงทะเบียน</h2><p class="hint">สถานะการลงทะเบียนตามคำตอบ</p><div class="bars" id="registration"></div><h2 class="jump">อายุการทำงาน</h2><p class="hint">จำนวนคำตอบตามช่วงอายุงาน</p><div class="bars" id="tenure"></div></article>
+</section>
+<section class="card branch-table" aria-labelledby="branches-heading">
+<h2 id="branches-heading">ผลสำรวจรายสาขา</h2>
+<p class="hint" id="branch-count"></p>
+<div class="scroll" tabindex="0" aria-label="ตารางผลสำรวจรายสาขา">
+<table><thead><tr>
+<th scope="col">รหัสร้านสาขา</th>
+<th scope="col">ชื่อสาขา</th>
+<th scope="col">พื้นที่</th>
+<th scope="col">ด้านการลงทะเบียน</th>
+<th scope="col">App Face Scan ใช้ได้ทุกเครื่องหรือไม่</th>
+<th scope="col">จำนวนโทรศัพท์ทั้งหมด (เครื่องร้าน+Delivery)</th>
+</tr></thead><tbody id="branch-rows"></tbody></table>
+</div>
 </section>
 </div>
 </main>
@@ -84,6 +99,25 @@ function barChart(id, entries, {max, warm = '', alt = false, scores = false} = {
 const SUPABASE_URL = 'https://ayoofsvusqwumorydyvm.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_0vGcJUxNiExdp10dIQ3tEA_w5P509xY';
 
+function renderBranches(entries) {
+  const rows = entries.map(entry => {
+    const row = node('tr');
+    for (const key of ['code', 'branch', 'area', 'registration', 'devices', 'phones']) {
+      row.append(node('td', entry[key] ?? '—'));
+    }
+    return row;
+  });
+  if (!rows.length) {
+    const row = node('tr');
+    const cell = node('td', 'ยังไม่มีคำตอบรายสาขา');
+    cell.colSpan = 6;
+    row.append(cell);
+    rows.push(row);
+  }
+  el('branch-rows').replaceChildren(...rows);
+  el('branch-count').textContent = nf.format(entries.length) + ' คำตอบ · เรียงจากคำตอบล่าสุด';
+}
+
 function renderSummary(summary) {
   const metrics = [
     ['คำตอบทั้งหมด', nf.format(summary.count)],
@@ -102,6 +136,7 @@ function renderSummary(summary) {
   barChart('registration', summary.registration, { warm: 'ลงทะเบียนไม่ครบ' });
   barChart('phones', summary.phones);
   barChart('tenure', summary.tenure);
+  renderBranches(Array.isArray(summary.branchRows) ? summary.branchRows : []);
   el('results').hidden = false;
 }
 
