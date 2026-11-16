@@ -25,7 +25,9 @@ header{background:#122f29;color:#fff}nav,.heroin,main{max-width:1240px;margin:au
 </nav></header>
 <section class="hero"><div class="heroin"><small>ผลสำรวจการใช้งาน</small><h1>แดชบอร์ด NSS POS Face Scan</h1><p>ติดตามความพร้อมของอุปกรณ์ การลงทะเบียน และความพึงพอใจของร้าน</p></div></section>
 <main>
-<p><button id="refresh" type="button" disabled class="primary">รีเฟรชข้อมูล</button></p>
+<p><button id="refresh" type="button" disabled class="primary">รีเฟรชข้อมูล</button>
+<button id="export-excel" type="button" disabled>ดาวน์โหลด Excel</button></p>
+<p id="export-status" role="status"></p>
 <p id="status" role="status"></p>
 <div id="results" hidden>
 <section class="metrics" aria-label="ตัวเลขสำคัญ" id="metrics"></section>
@@ -40,6 +42,7 @@ header{background:#122f29;color:#fff}nav,.heroin,main{max-width:1240px;margin:au
 </div>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.mini.min.js"></script>
 <script>
 const el = id => document.getElementById(id);
 const nf = new Intl.NumberFormat('th-TH');
@@ -107,22 +110,78 @@ function status(message, kind = '') {
   el('status').dataset.kind = kind;
 }
 
+function downloadExcel(snapshot) {
+  const xlsx = window.XLSX;
+  if (!xlsx) throw new Error('Excel export library unavailable');
+  const { summary, updated_at } = snapshot;
+  const updated = new Date(updated_at);
+  const overview = [
+    ['รายการ', 'ค่า'],
+    ['อัปเดตล่าสุด (เวลาไทย)', updated.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })],
+    ['คำตอบทั้งหมด', summary.count],
+    ['สาขาที่ตอบ', summary.branches],
+    ['คะแนนภาพรวมเฉลี่ย (เต็ม 5)', summary.ratingAverage],
+    ['คำตอบที่พบปัญหาอุปกรณ์', summary.deviceIssues]
+  ];
+  const scores = [
+    ['เมนู', 'คะแนนเฉลี่ย (เต็ม 5)', 'จำนวนคำตอบ'],
+    ...summary.menus.map((entry, i) => [menus[i], entry.value, entry.count])
+  ];
+  const distributions = [['หัวข้อ', 'ตัวเลือก', 'จำนวนคำตอบ']];
+  for (const [title, entries] of [
+    ['คะแนนภาพรวม', summary.rating],
+    ['อุปกรณ์', summary.devices],
+    ['การลงทะเบียน', summary.registration],
+    ['จำนวนโทรศัพท์', summary.phones],
+    ['อายุการทำงาน', summary.tenure]
+  ]) {
+    for (const entry of entries) distributions.push([title, entry.label, entry.value]);
+  }
+  const book = xlsx.utils.book_new();
+  for (const [name, data, widths] of [
+    ['ภาพรวม', overview, [40, 28]],
+    ['คะแนนรายเมนู', scores, [46, 24, 16]],
+    ['จำนวนคำตอบ', distributions, [22, 36, 16]]
+  ]) {
+    const sheet = xlsx.utils.aoa_to_sheet(data);
+    sheet['!cols'] = widths.map(wch => ({ wch }));
+    xlsx.utils.book_append_sheet(book, sheet, name);
+  }
+  const date = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Bangkok' }).format(updated);
+  xlsx.writeFile(book, 'NSS-POS-Face-Scan-' + date + '.xlsx');
+}
+
 if (!window.supabase) {
   status('โหลดการเชื่อมต่อไม่สำเร็จ กรุณาเปิดหน้าใหม่', 'error');
 } else {
   const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
   let request = 0;
+  let snapshot = null;
+  const exportButton = el('export-excel');
+  exportButton.addEventListener('click', () => {
+    if (!snapshot) return;
+    el('export-status').textContent = '';
+    try {
+      downloadExcel(snapshot);
+    } catch {
+      el('export-status').textContent = 'สร้างไฟล์ Excel ไม่สำเร็จ กรุณาโหลดหน้าเว็บใหม่แล้วลองอีกครั้ง';
+    }
+  });
   async function refresh() {
     const current = ++request;
     const { data, error } = await client.from('dashboard_public_summary')
       .select('summary,updated_at').eq('id', 1).maybeSingle();
     if (current !== request) return;
     if (error || !data) {
+      snapshot = null;
+      exportButton.disabled = true;
       el('results').hidden = true;
       status(error ? 'โหลดผลสรุปไม่สำเร็จ กรุณาลองใหม่' : 'รอผลสำรวจจาก Google Forms', error ? 'error' : '');
       return;
     }
     renderSummary(data.summary);
+    snapshot = data;
+    exportButton.disabled = false;
     const updated = new Date(data.updated_at).toLocaleString('th-TH', {
       timeZone: 'Asia/Bangkok', dateStyle: 'medium', timeStyle: 'short'
     });
