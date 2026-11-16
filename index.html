@@ -25,19 +25,7 @@ header{background:#122f29;color:#fff}nav,.heroin,main{max-width:1240px;margin:au
 </nav></header>
 <section class="hero"><div class="heroin"><small>ผลสำรวจการใช้งาน</small><h1>แดชบอร์ด NSS POS Face Scan</h1><p>ติดตามความพร้อมของอุปกรณ์ การลงทะเบียน และความพึงพอใจของร้าน</p></div></section>
 <main>
-<form id="signin" class="card signin" hidden>
-<label>อีเมล<input id="login-email" type="email" autocomplete="username" required></label>
-<label>รหัสผ่าน<input id="login-password" type="password" autocomplete="current-password" required></label>
-<button id="signin-submit" class="primary" type="submit">ลงชื่อเข้าใช้</button>
-</form>
-<button id="signout" type="button" hidden>ออกจากระบบ</button>
-<section class="filters" aria-label="ตัวกรองผลสำรวจ">
-<label>พื้นที่<select id="area" aria-label="พื้นที่"></select></label>
-<label>ตำแหน่ง<select id="role" aria-label="ตำแหน่ง"></select></label>
-<label>ค้นหาสาขา<input id="branch" type="search" placeholder="รหัสร้านหรือชื่อสาขา"></label>
-<button id="reset" type="button">ล้างตัวกรอง</button>
-<button id="refresh" type="button" disabled class="primary">รีเฟรชข้อมูล</button>
-</section>
+<p><button id="refresh" type="button" disabled class="primary">รีเฟรชข้อมูล</button></p>
 <p id="status" role="status"></p>
 <div id="results" hidden>
 <section class="metrics" aria-label="ตัวเลขสำคัญ" id="metrics"></section>
@@ -49,12 +37,6 @@ header{background:#122f29;color:#fff}nav,.heroin,main{max-width:1240px;margin:au
 <article class="card"><h2>ความพร้อมของอุปกรณ์</h2><p class="hint">สถานะการใช้งานแอปตามคำตอบ</p><div class="bars" id="devices"></div><h2 class="jump">จำนวนโทรศัพท์ต่อคำตอบ</h2><p class="hint">รวมเครื่องร้านและ Delivery ตามที่ผู้ตอบระบุ</p><div class="bars" id="phones"></div></article>
 <article class="card"><h2>การลงทะเบียน</h2><p class="hint">สถานะการลงทะเบียนตามคำตอบ</p><div class="bars" id="registration"></div><h2 class="jump">อายุการทำงาน</h2><p class="hint">จำนวนคำตอบตามช่วงอายุงาน</p><div class="bars" id="tenure"></div></article>
 </section>
-<section class="grid">
-<article class="card"><h2>คำตอบแยกตามพื้นที่</h2><div class="bars" id="areas"></div></article>
-<article class="card"><h2>คำตอบแยกตามตำแหน่ง</h2><div class="bars" id="roles"></div></article>
-</section>
-<section class="card feedback"><h2>ปัญหาที่พบและเสียงจากร้าน (VOE)</h2><p class="hint" id="feedbackCount"></p><div class="scroll" tabindex="0" aria-label="ตารางข้อความจากร้าน"><table><thead><tr><th scope="col">สาขา</th><th scope="col">พื้นที่</th><th scope="col">หัวข้อ</th><th scope="col">ข้อความ</th></tr></thead><tbody id="feedback"></tbody></table></div></section>
-<footer>สาขานับตามรหัสร้านที่ไม่ซ้ำกัน เปอร์เซ็นต์ของกราฟจำนวนคำตอบคำนวณจากคำตอบที่มีข้อมูลในแต่ละหัวข้อตามตัวกรอง ส่วนเปอร์เซ็นต์ของคะแนนเฉลี่ยคำนวณเทียบกับคะแนนเต็ม 5</footer>
 </div>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
@@ -63,11 +45,6 @@ const el = id => document.getElementById(id);
 const nf = new Intl.NumberFormat('th-TH');
 const pf = new Intl.NumberFormat('th-TH', {style:'percent', maximumFractionDigits:1});
 const menus = ['ยกเลิกใบเสร็จ All Void & Item Void','Shift เงินสด','ตัดซองดรอป','ปรับปรุงเงินฝากธนาคาร','ยืนยันฝากเงินธนาคาร Banking Agent'];
-const roles = ['ผู้จัดการร้าน','ผู้ช่วยผู้จัดการ','พนง. (หัวหน้าผลัด)','FC'];
-const tenure = ['1-3 ปี','4-6 ปี','7-10 ปี','มากกว่า 10 ปี'];
-const deviceLabels = ['ใช้ได้ทุกเครื่อง','ใช้ไม่ได้บางเครื่อง'];
-const registrationLabels = ['ลงทะเบียนครบทุกตำแหน่ง','ลงทะเบียนไม่ครบ'];
-let rows = [];
 
 function node(tag, content, className) {
   const element = document.createElement(tag);
@@ -75,19 +52,8 @@ function node(tag, content, className) {
   if (className) element.className = className;
   return element;
 }
-function average(numbers) {
-  return numbers.length ? numbers.reduce((sum, value) => sum + value, 0) / numbers.length : null;
-}
 function scoreText(value) {
   return value === null ? '—' : value.toFixed(2) + ' / 5 (' + pf.format(value / 5) + ')';
-}
-function tally(data, key, order = []) {
-  const counts = new Map(order.map(label => [label, 0]));
-  for (const row of data) {
-    const value = row[key] == null ? '' : String(row[key]);
-    if (value) counts.set(value, (counts.get(value) || 0) + 1);
-  }
-  return Array.from(counts).map(([label,value]) => ({label,value}));
 }
 function barChart(id, entries, {max, warm = '', alt = false, scores = false} = {}) {
   const parent = el(id);
@@ -95,7 +61,7 @@ function barChart(id, entries, {max, warm = '', alt = false, scores = false} = {
   const scale = max || total;
   parent.replaceChildren();
   if (!entries.some(entry => scores ? entry.value !== null : entry.value > 0)) {
-    parent.append(node('p','ไม่มีข้อมูลในตัวกรองนี้','hint'));
+    parent.append(node('p','ไม่มีข้อมูล','hint'));
     return;
   }
   for (const entry of entries) {
@@ -112,184 +78,66 @@ function barChart(id, entries, {max, warm = '', alt = false, scores = false} = {
     parent.append(row);
   }
 }
-function options(id, label) {
-  const field = el(id);
-  const previous = field.value;
-  const values = [...new Set(rows.map(row => row[id]).filter(Boolean))].sort((a,b) => a.localeCompare(b,'th',{numeric:true}));
-  field.replaceChildren(new Option(label,''), ...values.map(value => new Option(value,value)));
-  if (values.includes(previous)) field.value = previous;
-}
-function render() {
-  const area = el('area').value;
-  const role = el('role').value;
-  const branch = el('branch').value.trim().toLowerCase();
-  const data = rows.filter(row =>
-    (!area || row.area === area) && (!role || row.role === role) &&
-    [row.code,row.branch].some(value => String(value || '').toLowerCase().includes(branch)));
-  const ratings = data.map(row => row.rating).filter(Number.isFinite);
-  const devices = tally(data,'devices',deviceLabels);
-  const registration = tally(data,'registration',registrationLabels);
-  const deviceTotal = devices.reduce((sum, entry) => sum + entry.value, 0);
-  const metrics = [
-    ['คำตอบทั้งหมด',nf.format(data.length),'ตามตัวกรองปัจจุบัน'],
-    ['สาขาที่ตอบ',nf.format(new Set(data.map(row => row.code).filter(Boolean)).size),'นับจากรหัสร้านสาขา'],
-    ['คะแนนภาพรวมเฉลี่ย',scoreText(average(ratings)),nf.format(ratings.length) + ' คำตอบที่ให้คะแนน'],
-    ['คำตอบที่พบปัญหาอุปกรณ์',nf.format(devices[1].value),deviceTotal ? pf.format(devices[1].value / deviceTotal) + ' ของคำตอบด้านอุปกรณ์' : 'ไม่มีคำตอบด้านอุปกรณ์']
-  ];
-  el('metrics').replaceChildren(...metrics.map(([title,value,detail]) => {
-    const card = node('article',undefined,'metric');
-    card.append(node('span',title),node('b',value),node('small',detail));
-    return card;
-  }));
-  barChart('menus',menus.map((label,index) => {
-    const numbers = data.map(row => row.menus[index]).filter(Number.isFinite);
-    return {label,value:average(numbers),count:numbers.length};
-  }),{max:5,scores:true});
-  barChart('rating',tally(data,'rating',['5','4','3','2','1']),{alt:true});
-  barChart('devices',devices,{warm:deviceLabels[1]});
-  barChart('registration',registration,{warm:registrationLabels[1]});
-  barChart('phones',tally(data,'phones',['1','2','3','4','5']));
-  barChart('tenure',tally(data,'tenure',tenure));
-  barChart('areas',tally(data,'area').sort((a,b) => b.value - a.value));
-  barChart('roles',tally(data,'role',roles));
-  const feedback = [];
-  for (const row of [...data].reverse()) {
-    for (const [label,message] of [['ปัญหาที่พบ',row.issue],['VOE เสียงจากร้าน',row.voe]]) {
-      if (!message) continue;
-      const tr = node('tr');
-      const store = [row.code,row.branch].filter(Boolean).join(' · ');
-      tr.append(...[store || '—',row.area || '—',label,message].map(value => node('td',value)));
-      feedback.push(tr);
-    }
-  }
-  el('feedbackCount').textContent = feedback.length ? nf.format(feedback.length) + ' ข้อความตามตัวกรอง' : 'ไม่มีข้อความในตัวกรองนี้';
-  el('feedback').replaceChildren(...feedback);
-}
-function setData(next) {
-  rows = next;
-  options('area','ทุกพื้นที่');
-  options('role','ทุกตำแหน่ง');
-  el('results').hidden = false;
-  render();
-}
-function status(message,kind = '') {
-  el('status').textContent = message;
-  el('status').dataset.kind = kind;
-}
 const SUPABASE_URL = 'https://ayoofsvusqwumorydyvm.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_0vGcJUxNiExdp10dIQ3tEA_w5P509xY';
 
-function connectDashboard() {
-  if (!window.supabase || !SUPABASE_PUBLISHABLE_KEY.startsWith('sb_publishable_')) {
-    status('ผู้ดูแลต้องตั้งค่า Supabase ใน index.html ก่อนเปิดใช้งาน', 'error');
-    return;
-  }
+function renderSummary(summary) {
+  const metrics = [
+    ['คำตอบทั้งหมด', nf.format(summary.count)],
+    ['สาขาที่ตอบ', nf.format(summary.branches)],
+    ['คะแนนภาพรวมเฉลี่ย', scoreText(summary.ratingAverage)],
+    ['คำตอบที่พบปัญหาอุปกรณ์', nf.format(summary.deviceIssues)]
+  ];
+  el('metrics').replaceChildren(...metrics.map(([title, value]) => {
+    const card = node('article', undefined, 'metric');
+    card.append(node('span', title), node('b', value));
+    return card;
+  }));
+  barChart('menus', menus.map((label, i) => ({ label, ...summary.menus[i] })), { max: 5, scores: true });
+  barChart('rating', summary.rating, { alt: true });
+  barChart('devices', summary.devices, { warm: 'ใช้ไม่ได้บางเครื่อง' });
+  barChart('registration', summary.registration, { warm: 'ลงทะเบียนไม่ครบ' });
+  barChart('phones', summary.phones);
+  barChart('tenure', summary.tenure);
+  el('results').hidden = false;
+}
 
+function status(message, kind = '') {
+  el('status').textContent = message;
+  el('status').dataset.kind = kind;
+}
+
+if (!window.supabase) {
+  status('โหลดการเชื่อมต่อไม่สำเร็จ กรุณาเปิดหน้าใหม่', 'error');
+} else {
   const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
-  let viewerId = null;
-  let channel = null;
-  let realtime = false;
   let request = 0;
-
   async function refresh() {
-    if (!viewerId) return;
     const current = ++request;
-    const { data, error } = await client.from('dashboard_snapshot')
-      .select('rows,updated_at').eq('id', 1).maybeSingle();
-    if (current !== request || !viewerId) return;
-
+    const { data, error } = await client.from('dashboard_public_summary')
+      .select('summary,updated_at').eq('id', 1).maybeSingle();
+    if (current !== request) return;
     if (error || !data) {
-      setData([]);
       el('results').hidden = true;
-      status(error
-        ? 'โหลดผลไม่สำเร็จ กรุณาลองใหม่'
-        : 'ยังไม่มีข้อมูลที่บัญชีนี้มีสิทธิ์ดู กรุณาติดต่อผู้ดูแล', 'error');
+      status(error ? 'โหลดผลสรุปไม่สำเร็จ กรุณาลองใหม่' : 'รอผลสำรวจจาก Google Forms', error ? 'error' : '');
       return;
     }
-
-    setData(data.rows);
+    renderSummary(data.summary);
     const updated = new Date(data.updated_at).toLocaleString('th-TH', {
       timeZone: 'Asia/Bangkok', dateStyle: 'medium', timeStyle: 'short'
     });
-    status('ซิงก์ล่าสุด ' + updated + ' น. · ' +
-      (realtime ? 'อัปเดตอัตโนมัติ' : 'ตรวจข้อมูลทุก 30 วินาที'));
+    status('อัปเดตล่าสุด ' + updated + ' น.');
   }
-
-  function setSession(session) {
-    const nextId = session?.user.id ?? null;
-    el('signin').hidden = Boolean(nextId);
-    el('signout').hidden = !nextId;
-    el('refresh').disabled = !nextId;
-    if (nextId === viewerId) return;
-
-    request++;
-    viewerId = nextId;
-    realtime = false;
-    setData([]);
-    el('results').hidden = true;
-    if (channel) {
-      void client.removeChannel(channel);
-      channel = null;
-    }
-    if (!nextId) {
-      status('');
-      return;
-    }
-
-    status('กำลังโหลดผลจาก Supabase…');
-    const subscription = client.channel('survey-' + crypto.randomUUID());
-    channel = subscription;
-    subscription.on('postgres_changes', {
-      event: '*', schema: 'public', table: 'dashboard_snapshot'
-    }, refresh).subscribe(state => {
-      if (channel !== subscription) return;
-      realtime = state === 'SUBSCRIBED';
-      void refresh();
-    });
-    void refresh();
-  }
-
-  el('signin').addEventListener('submit', async event => {
-    event.preventDefault();
-    el('signin-submit').disabled = true;
-    status('กำลังลงชื่อเข้าใช้…');
-    try {
-      const { error } = await client.auth.signInWithPassword({
-        email: el('login-email').value.trim(),
-        password: el('login-password').value
-      });
-      if (error) status('ลงชื่อเข้าใช้ไม่ได้ กรุณาตรวจอีเมลและรหัสผ่าน', 'error');
-    } catch {
-      status('เชื่อมต่อไม่ได้ กรุณาลองใหม่', 'error');
-    } finally {
-      el('login-password').value = '';
-      el('signin-submit').disabled = false;
-    }
-  });
-  el('signout').addEventListener('click', async () => {
-    const { error } = await client.auth.signOut({ scope: 'local' });
-    if (error) status('ออกจากระบบไม่สำเร็จ กรุณาลองใหม่', 'error');
-  });
-  client.auth.onAuthStateChange((_event, session) => {
-    setTimeout(() => setSession(session), 0);
-  });
+  el('refresh').disabled = false;
   el('refresh').addEventListener('click', refresh);
-  setInterval(() => {
-    if (!document.hidden) void refresh();
-  }, 30000);
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) void refresh();
+  client.channel('public-survey-summary').on('postgres_changes', {
+    event: '*', schema: 'public', table: 'dashboard_public_summary'
+  }, refresh).subscribe(state => {
+    if (state === 'SUBSCRIBED') void refresh();
   });
+  setInterval(() => { if (!document.hidden) void refresh(); }, 30000);
+  void refresh();
 }
-
-el('area').addEventListener('change',render);
-el('role').addEventListener('change',render);
-el('branch').addEventListener('input',render);
-el('reset').addEventListener('click',() => {
-  for (const id of ['area','role','branch']) el(id).value = '';
-  render();
-});
-connectDashboard();
 </script>
 </body>
 </html>
