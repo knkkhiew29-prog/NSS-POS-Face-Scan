@@ -168,9 +168,16 @@ async function downloadExcel(snapshot) {
     ['คะแนนภาพรวมเฉลี่ย (เต็ม 5)', summary.ratingAverage],
     ['คำตอบที่พบปัญหาอุปกรณ์', summary.deviceIssues]
   ];
+  const details = summary.exportRows || [];
+  const identityHeaders = [
+    'รหัสร้านสาขา', 'ชื่อสาขา', 'พื้นที่',
+    'ตำแหน่ง (ผู้ใช้งาน NSS POS Face Scan)', 'อายุการทำงาน ของผู้ตอบแบบสอบถาม'
+  ];
+  const identity = row => [row.code == null ? null : String(row.code),
+    row.branch, row.area, row.role, row.tenure];
   const scores = [
-    ['เมนู', 'คะแนนเฉลี่ย (เต็ม 5)', 'จำนวนคำตอบ'],
-    ...summary.menus.map((entry, i) => [menus[i], entry.value, entry.count])
+    [...identityHeaders, ...menus],
+    ...details.map(row => [...identity(row), ...row.menus])
   ];
   const distributions = [['หัวข้อ', 'ตัวเลือก', 'จำนวนคำตอบ']];
   for (const [title, entries] of [
@@ -183,17 +190,22 @@ async function downloadExcel(snapshot) {
     for (const entry of entries) distributions.push([title, entry.label, entry.value]);
   }
   const branchTable = [
-    [...document.querySelectorAll('.branch-table th')].map(cell => cell.textContent.trim()),
-    ...(summary.branchRows || []).map(row => [row.code == null ? null : String(row.code),
-      row.branch, row.area, row.registration, row.devices, row.phones])
+    [...identityHeaders, 'ด้านการลงทะเบียน', 'App Face Scan ใช้ได้ทุกเครื่องหรือไม่',
+      'จำนวนโทรศัพท์ทั้งหมด (เครื่องร้าน+Delivery)', 'คะแนนภาพรวม Face Scan (เต็ม 5)'],
+    ...details.map(row => [...identity(row), row.registration, row.devices, row.phones, row.rating])
+  ];
+  const feedback = [
+    [...identityHeaders, 'VOE เสียงจากร้าน'],
+    ...details.filter(row => row.voe?.trim()).map(row => [...identity(row), row.voe])
   ];
   const book = new window.ExcelJS.Workbook();
   const fill = argb => ({type:'pattern', pattern:'solid', fgColor:{argb}});
   const subtitle = 'อัปเดตล่าสุด ' + updated.toLocaleString('th-TH', {timeZone:'Asia/Bangkok'});
   for (const [name, data, widths] of [
     ['ภาพรวม', overview, [40, 28]],
-    ['ผลสำรวจรายสาขา', branchTable, [18, 28, 14, 29, 32, 32]],
-    ['คะแนนรายเมนู', scores, [46, 24, 16]],
+    ['ความพึงพอใจ POS NSS', scores, [18, 29, 14, 31, 29, 27, 20, 22, 26, 30]],
+    ['Face Scan', branchTable, [18, 29, 14, 31, 29, 29, 32, 32, 26]],
+    ['VOE เสียงจากร้าน', feedback, [18, 29, 14, 31, 29, 65]],
     ['จำนวนคำตอบ', distributions, [22, 36, 16]]
   ]) {
     const sheet = book.addWorksheet(name, {views:[{state:'frozen', ySplit:4, showGridLines:false}]});
@@ -215,7 +227,7 @@ async function downloadExcel(snapshot) {
     data.forEach((values, index) => {
       const row = sheet.getRow(index + 4);
       row.values = values;
-      row.height = index === 0 ? (name === 'ผลสำรวจรายสาขา' ? 44 : 30) : 32;
+      row.height = index === 0 ? 44 : (name === 'VOE เสียงจากร้าน' ? 52 : 32);
       for (let column = 1; column <= widths.length; column++) {
         const cell = row.getCell(column);
         cell.fill = fill(index === 0 ? 'FFDDECE3' : index % 2 ? 'FFFFFFFF' : 'FFF2F7F3');
@@ -225,8 +237,8 @@ async function downloadExcel(snapshot) {
           horizontal:typeof cell.value === 'number' ? 'center' : 'left'};
       }
     });
-    if (name === 'ผลสำรวจรายสาขา') {
-      sheet.autoFilter = {from:{row:4,column:1}, to:{row:Math.max(4,data.length + 3),column:6}};
+    if (name !== 'ภาพรวม') {
+      sheet.autoFilter = {from:{row:4,column:1}, to:{row:data.length + 3,column:widths.length}};
     }
   }
   const date = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Bangkok' }).format(updated);
