@@ -28,6 +28,7 @@ header{background:#122f29;color:#fff}nav,.heroin,main{max-width:1240px;margin:au
 .branch-table td:nth-child(1),.branch-table td:nth-child(3){white-space:nowrap;font-variant-numeric:tabular-nums}
 .branch-table td:nth-child(2){overflow-wrap:anywhere}
 .branch-table td:nth-child(6){min-width:0;text-align:center}
+.question-score{font-size:1.7rem;font-weight:700;color:#14634f;margin:14px 0}.score-scale{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:12px 0}.score-scale>div{background:#eaf3ec;border-radius:8px;padding:10px 4px;text-align:center}.score-scale b,.score-scale span{display:block}.score-scale span{font-size:.75rem;margin-top:4px}#all-questions .card{margin-bottom:0}#all-questions{align-items:start}#all-questions td:first-child{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -43,14 +44,7 @@ header{background:#122f29;color:#fff}nav,.heroin,main{max-width:1240px;margin:au
 <p id="status" role="status"></p>
 <div id="results" hidden>
 <section class="metrics" aria-label="ตัวเลขสำคัญ" id="metrics"></section>
-<section class="grid">
-<article class="card"><h2>ความพึงพอใจรายเมนู POS NSS</h2><p class="hint">คะแนนเฉลี่ยจากผู้ให้คะแนนแต่ละเมนู เต็ม 5 คะแนน</p><div class="bars" id="menus"></div></article>
-<article class="card"><h2>คะแนนภาพรวม Face Scan</h2><p class="hint">จำนวนคำตอบในแต่ละระดับคะแนน</p><div class="bars" id="rating"></div></article>
-</section>
-<section class="grid">
-<article class="card"><h2>ความพร้อมของอุปกรณ์</h2><p class="hint">สถานะการใช้งานแอปตามคำตอบ</p><div class="bars" id="devices"></div><h2 class="jump">จำนวนโทรศัพท์ต่อคำตอบ</h2><p class="hint">รวมเครื่องร้านและ Delivery ตามที่ผู้ตอบระบุ</p><div class="bars" id="phones"></div></article>
-<article class="card"><h2>การลงทะเบียน</h2><p class="hint">สถานะการลงทะเบียนตามคำตอบ</p><div class="bars" id="registration"></div><h2 class="jump">อายุการทำงาน</h2><p class="hint">จำนวนคำตอบตามช่วงอายุงาน</p><div class="bars" id="tenure"></div></article>
-</section>
+<section class="grid" id="all-questions" aria-label="ผลสำรวจทุกคำถาม"></section>
 <section class="card branch-table" aria-labelledby="branches-heading">
 <h2 id="branches-heading">ผลสำรวจรายสาขา</h2>
 <p class="hint" id="branch-count"></p>
@@ -129,6 +123,87 @@ function renderBranches(entries) {
   el('branch-count').textContent = nf.format(entries.length) + ' คำตอบ · เรียงจากคำตอบล่าสุด';
 }
 
+function renderQuestionnaire(questionnaire) {
+  const panel = el('all-questions');
+  panel.replaceChildren();
+  if (!questionnaire) {
+    panel.append(node('p', 'กำลังรอข้อมูลทุกคำถามจากชีต', 'hint'));
+    return;
+  }
+  const { headers, rows } = questionnaire;
+  const normalize = text => text.replace(/[\s*]+/g, '').toLowerCase();
+  const findColumn = pattern => headers.findIndex(header => pattern.test(normalize(header)));
+  const code = findColumn(/^(รหัสร้านสาขา|รหัสสาขา|รหัสร้าน)$/);
+  const branch = findColumn(/^(ชื่อสาขา|ชื่อร้านสาขา|ชื่อร้าน)$/);
+  headers.forEach((title, column) => {
+    if (!title || /^(ประทับเวลา|การประทับเวลา|เวลาประทับ|การบันทึกเวลา|timestamp)$/.test(normalize(title)) ||
+        column === code || column === branch) return;
+    const card = node('article', undefined, 'card');
+    card.append(node('h2', title.replace(/\s*\*\s*$/, '')));
+    const answers = rows.map(row => String(row[column] ?? '').trim()).filter(Boolean);
+    card.append(node('p', nf.format(answers.length) + ' คำตอบ · เว้นว่าง ' +
+      nf.format(rows.length - answers.length), 'hint'));
+    if (/ปัญหาที่พบ|voe|เสียงจากร้าน|ข้อเสนอแนะ|ความคิดเห็น|อื่น.*ระบุ/i.test(title)) {
+      const scroll = node('div', undefined, 'scroll');
+      scroll.tabIndex = 0;
+      const table = node('table');
+      const head = node('tr');
+      for (const label of ['รหัสร้านสาขา', 'ชื่อสาขา', 'คำตอบ']) head.append(node('th', label));
+      const thead = node('thead');
+      thead.append(head);
+      const body = node('tbody');
+      for (const row of rows.slice().reverse()) {
+        if (!String(row[column] ?? '').trim()) continue;
+        const tr = node('tr');
+        for (const value of [row[code], row[branch], row[column]]) tr.append(node('td', value || '—'));
+        body.append(tr);
+      }
+      table.append(thead, body);
+      scroll.append(table);
+      card.append(scroll);
+      if (!answers.length) card.append(node('p', 'ยังไม่มีข้อความ', 'hint'));
+    } else {
+      const score = answer => {
+        const match = /^(?:([1-5])|.*\(\s*([1-5])\s*\))$/.exec(answer.normalize('NFKC'));
+        return match ? Number(match[1] || match[2]) : null;
+      };
+      const isScore = /all\s*void|shift|ตัดซอง|เงินฝาก|banking|ภาพรวม.*face\s*scan|คะแนน|ความพึงพอใจ/i.test(title);
+      const scores = answers.map(score).filter(Number.isFinite);
+      if (isScore) {
+        const average = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+        const value = node('p', scoreText(average), 'question-score');
+        card.append(value);
+        const scale = node('div', undefined, 'score-scale');
+        scale.setAttribute('aria-label', 'ระดับคะแนน 1 ถึง 5');
+        for (let level = 1; level <= 5; level++) {
+          const count = scores.filter(number => number === level).length;
+          const block = node('div');
+          block.append(node('b', String(level)), node('span', nf.format(count) + ' คำตอบ'));
+          scale.append(block);
+        }
+        card.append(scale);
+      }
+      const counts = new Map();
+      const categories = isScore ? scores.map(String) : answers;
+      for (const answer of categories) counts.set(answer, (counts.get(answer) || 0) + 1);
+      const entries = isScore ? ['5','4','3','2','1'].map(label => ({label, value:counts.get(label) || 0})) :
+        Array.from(counts, ([label, value]) => ({label, value})).sort((a,b) => b.value - a.value);
+      if (/ข่าวสารถึงร้าน/.test(title)) {
+        for (const label of ['ทราบข่าวสาร', 'ไม่ทราบข่าวสาร']) {
+          if (!entries.some(entry => entry.label === label)) entries.push({label, value:0});
+        }
+      }
+      const chart = node('div', undefined, 'bars');
+      chart.id = 'question-' + column;
+      card.append(chart);
+      panel.append(card);
+      barChart(chart.id, entries, {alt:isScore});
+      return;
+    }
+    panel.append(card);
+  });
+}
+
 function renderSummary(summary) {
   const metrics = [
     ['คำตอบทั้งหมด', nf.format(summary.count)],
@@ -141,12 +216,7 @@ function renderSummary(summary) {
     card.append(node('span', title), node('b', value));
     return card;
   }));
-  barChart('menus', menus.map((label, i) => ({ label, ...summary.menus[i] })), { max: 5, scores: true });
-  barChart('rating', summary.rating, { alt: true });
-  barChart('devices', summary.devices, { warm: 'ใช้ไม่ได้บางเครื่อง' });
-  barChart('registration', summary.registration, { warm: 'ลงทะเบียนไม่ครบ' });
-  barChart('phones', summary.phones);
-  barChart('tenure', summary.tenure);
+  renderQuestionnaire(summary.questionnaire);
   renderBranches(Array.isArray(summary.branchRows) ? summary.branchRows : []);
   el('results').hidden = false;
 }
@@ -198,6 +268,8 @@ async function downloadExcel(snapshot) {
     [...identityHeaders, 'VOE เสียงจากร้าน'],
     ...details.filter(row => row.voe?.trim()).map(row => [...identity(row), row.voe])
   ];
+  const questionnaire = summary.questionnaire;
+  const allAnswers = questionnaire ? [questionnaire.headers, ...questionnaire.rows.slice().reverse()] : [['ยังไม่มีข้อมูลทุกคำถาม']];
   const book = new window.ExcelJS.Workbook();
   const fill = argb => ({type:'pattern', pattern:'solid', fgColor:{argb}});
   const subtitle = 'อัปเดตล่าสุด ' + updated.toLocaleString('th-TH', {timeZone:'Asia/Bangkok'});
@@ -206,7 +278,8 @@ async function downloadExcel(snapshot) {
     ['ความพึงพอใจ POS NSS', scores, [18, 29, 14, 31, 29, 27, 20, 22, 26, 30]],
     ['Face Scan', branchTable, [18, 29, 14, 31, 29, 29, 32, 32, 26]],
     ['VOE เสียงจากร้าน', feedback, [18, 29, 14, 31, 29, 65]],
-    ['จำนวนคำตอบ', distributions, [22, 36, 16]]
+    ['จำนวนคำตอบ', distributions, [22, 36, 16]],
+    ['คำตอบทุกคำถาม', allAnswers, allAnswers[0].map((_,i) => i === 0 ? 26 : 30)]
   ]) {
     const sheet = book.addWorksheet(name, {views:[{state:'frozen', ySplit:4, showGridLines:false}]});
     widths.forEach((width, index) => { sheet.getColumn(index + 1).width = width; });
