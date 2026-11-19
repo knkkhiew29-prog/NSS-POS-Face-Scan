@@ -546,12 +546,10 @@ async function downloadExcel(snapshot) {
   ];
   const feedback = [
     [...identityHeaders, 'VOE เสียงจากร้าน'],
-    ...details.filter(row => isMeaningfulVoe(row.voe)).map(row => [...identity(row), row.voe])
+    ...details.map(row => [...identity(row), row.voe])
   ];
   const questionnaire = summary.questionnaire;
-  const allAnswers = questionnaire ? [questionnaire.headers, ...questionnaire.rows.slice().reverse().map(row =>
-    row.map((value, index) => /voe|เสียงจากร้าน/i.test(questionnaire.headers[index] || '') && !isMeaningfulVoe(value) ? '' : value)
-  )] : [['ยังไม่มีข้อมูลทุกคำถาม']];
+  const allAnswers = questionnaire ? [questionnaire.headers, ...questionnaire.rows.slice().reverse()] : [['ยังไม่มีข้อมูลทุกคำถาม']];
   const book = new window.ExcelJS.Workbook();
   const fill = argb => ({type:'pattern', pattern:'solid', fgColor:{argb}});
   const subtitle = 'อัปเดตล่าสุด ' + updated.toLocaleString('th-TH', {timeZone:'Asia/Bangkok'});
