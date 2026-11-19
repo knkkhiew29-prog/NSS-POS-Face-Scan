@@ -125,6 +125,17 @@ function barChart(id, entries, {max, warm = '', alt = false, scores = false, uni
 const SUPABASE_URL = 'https://ayoofsvusqwumorydyvm.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_0vGcJUxNiExdp10dIQ3tEA_w5P509xY';
 
+function isMeaningfulVoe(value) {
+  const text = String(value ?? '').normalize('NFKC').trim();
+  const letters = text.replace(/[^\p{L}\p{M}]/gu, '').toLowerCase();
+  if (!letters || /^(.)\1+$/u.test(letters)) return false;
+  const plain = letters.replace(/(?:ครับ|ค่ะ|คะ|จ้า|จ้ะ)+$/u, '');
+  if (/^(?:ไม่มี|ไม่มีข้อเสนอแนะ|ไม่มีความคิดเห็น|ไม่มีปัญหา|ไม่มีเพิ่มเติม|ไม่มีอะไรเพิ่มเติม|ไม่มีแล้ว|ไม่พบปัญหา|ไม่ระบุ|ไม่ได้ระบุ|ไม่ทราบ|ไม่มีข้อมูล|ไม่แสดงความคิดเห็น|ไม่มีข้อคิดเห็น|ไม่มีข้อเสนอแนะเพิ่มเติม|ไม่มีความคิดเห็นเพิ่มเติม|ไม่มีครับ|ดี|ดีมาก|โอเค|ปกติ|ทดสอบ|test|testing|ok|okay|good|none|no|na|nil|null|undefined|nothing|nocomment|nocomments|nofeedback|nosuggestion|nosuggestions)$/u.test(plain)) return false;
+  // Thai sentences have no word spaces: keep substantive short Thai feedback too.
+  if (/[\u0E00-\u0E7F]/u.test(letters)) return letters.length >= 6;
+  return letters.length >= 6 && text.split(/\s+/u).filter(word => /\p{L}/u.test(word)).length >= 2;
+}
+
 let branchSnapshot = null;
 function branchNeedsFollowup(entry) {
   return /ไม่ครบ/.test(String(entry.registration ?? '')) ||
@@ -289,8 +300,9 @@ function renderQuestionnaire(questionnaire) {
     const displayTitle = normalize(title) === 'ปัญหาที่พบ' ? 'ปัญหาที่ใช้ไม่ได้บางเครื่อง' : title.replace(/\s*\*\s*$/, '');
     card.append(node('h3', displayTitle));
     if (/ปัญหาที่พบ|ปัญหาที่ใช้ไม่ได้บางเครื่อง|สาเหตุ.*ลงทะเบียน|เหตุผล.*ลงทะเบียน/.test(title)) card.classList.add('issue-feedback');
-    const answers = rows.map(row => String(row[column] ?? '').trim()).filter(Boolean);
-    if (!isArea) card.append(node('p', nf.format(answers.length) + ' คำตอบ · เว้นว่าง ' +
+    const isVoe = /voe|เสียงจากร้าน/i.test(title);
+    const answers = rows.map(row => String(row[column] ?? '').trim()).filter(answer => isVoe ? isMeaningfulVoe(answer) : Boolean(answer));
+    if (!isArea) card.append(node('p', isVoe ? nf.format(answers.length) + ' ความคิดเห็นที่มีเนื้อหา' : nf.format(answers.length) + ' คำตอบ · เว้นว่าง ' +
       nf.format(rows.length - answers.length), 'hint'));
     if (isArea) {
       const areas = new Map();
@@ -317,7 +329,7 @@ function renderQuestionnaire(questionnaire) {
         const feedback = node('div', undefined, 'voe-grid');
         for (const row of rows.slice().reverse()) {
           const answer = String(row[column] ?? '').trim();
-          if (!answer) continue;
+          if (!answer || (isVoe && !isMeaningfulVoe(answer))) continue;
           const item = node('article', undefined, 'voe-answer');
           item.append(node('p', [row[code], row[branch]].filter(Boolean).join(' · ') || 'ไม่ระบุสาขา', 'voe-identity'),
             node('p', answer, 'voe-message'));
@@ -451,9 +463,9 @@ function renderSummary(summary) {
   const codeColumn = identityColumn(/^(รหัสร้านสาขา|รหัสสาขา|รหัสร้าน)$/);
   const branchColumn = identityColumn(/^(ชื่อสาขา|ชื่อร้านสาขา|ชื่อร้าน)$/);
   const voicedBranches = voeColumn >= 0 ? summary.questionnaire.rows
-    .filter(row => String(row[voeColumn] ?? '').trim())
+    .filter(row => isMeaningfulVoe(row[voeColumn]))
     .map(row => String(row[codeColumn] ?? '').trim() || String(row[branchColumn] ?? '').trim()) :
-    (summary.exportRows || []).filter(row => String(row.voe ?? '').trim())
+    (summary.exportRows || []).filter(row => isMeaningfulVoe(row.voe))
       .map(row => String(row.code ?? '').trim() || String(row.branch ?? '').trim());
   const voices = new Set(voicedBranches.filter(Boolean).map(value => value.replace(/\s+/g, '').toLowerCase())).size;
   const single = (title, value, unit, danger = false) => {
@@ -534,10 +546,12 @@ async function downloadExcel(snapshot) {
   ];
   const feedback = [
     [...identityHeaders, 'VOE เสียงจากร้าน'],
-    ...details.filter(row => row.voe?.trim()).map(row => [...identity(row), row.voe])
+    ...details.filter(row => isMeaningfulVoe(row.voe)).map(row => [...identity(row), row.voe])
   ];
   const questionnaire = summary.questionnaire;
-  const allAnswers = questionnaire ? [questionnaire.headers, ...questionnaire.rows.slice().reverse()] : [['ยังไม่มีข้อมูลทุกคำถาม']];
+  const allAnswers = questionnaire ? [questionnaire.headers, ...questionnaire.rows.slice().reverse().map(row =>
+    row.map((value, index) => /voe|เสียงจากร้าน/i.test(questionnaire.headers[index] || '') && !isMeaningfulVoe(value) ? '' : value)
+  )] : [['ยังไม่มีข้อมูลทุกคำถาม']];
   const book = new window.ExcelJS.Workbook();
   const fill = argb => ({type:'pattern', pattern:'solid', fgColor:{argb}});
   const subtitle = 'อัปเดตล่าสุด ' + updated.toLocaleString('th-TH', {timeZone:'Asia/Bangkok'});
